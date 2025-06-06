@@ -1,18 +1,23 @@
 import jwt
-from jwt.exceptions import InvalidTokenError
+from jwt import InvalidTokenError
 from typing import Annotated
-from fastapi import Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status
+from fastapi.security import (HTTPBearer,HTTPAuthorizationCredentials)
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_valid_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    with open("public_key.pem", "rb") as f:
-        public_key = f.read()
+with open("public_key.pem", "rb") as f:
+    PUBLIC_KEY = f.read()
 
+
+async def get_valid_user(token: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]):
     try:
-        payload = jwt.decode(token, public_key, algorithms="RS256")
-        return payload
-    except InvalidTokenError:
-        raise HTTPException(status_code=401, detail=[{"msg": "token invalid"}])
+        payload = jwt.decode(token.credentials, PUBLIC_KEY, algorithms=["RS256"])
+        return payload 
+    except (InvalidTokenError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=[{"msg": "token invalid"}],
+            headers={"WWW-Authenticate": "Bearer"},
+        )
